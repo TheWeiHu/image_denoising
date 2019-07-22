@@ -70,7 +70,7 @@ PATH = "./dataset/ground/"
 IMAGES = generate_file_list(PATH)
 DIMENSION = 256
 EPOCHS = 10000
-LR = 0.001  # TODO: diminish LR as training progresses
+LR = 0.001  # TODO: diminish LR as training progresses?
 BATCH_SIZE = 1
 
 
@@ -107,14 +107,10 @@ def cnn_model_fn(inputs):
 
 
 def main():
-    # Load in our custom training data -- based on these instructions:
-    # https://stackoverflow.com/questions/37340129/tensorflow-training-on-my-own-image
-    # Evidently, it is not the optimal approach.
-
-    original = tf.read_file(PATH + random.choice(IMAGES))
+    path = tf.placeholder(tf.string)
+    original = tf.read_file(path)
     original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
     original = tf.cast(original, tf.float32)
-
     noise = gaussian_noise(tf.shape(original), 0, 3)
     noisy_image = original + noise
 
@@ -137,14 +133,14 @@ def main():
 
     with tf.Session() as sess:
 
-        # sess.run(tf.global_variables_initializer())
-        # loss_array = []
-        saver.restore(sess, "./model/model.ckpt")
-        loss_array = load_loss_array()
+        sess.run(tf.global_variables_initializer())
+        loss_array = []
+        # saver.restore(sess, "./model/model.ckpt")
+        # loss_array = load_loss_array()
 
         for step in range(EPOCHS):
 
-            sess.run(train_op)
+            sess.run(train_op, feed_dict={path: PATH + random.choice(IMAGES)})
 
             if step % 10 == 0:
 
