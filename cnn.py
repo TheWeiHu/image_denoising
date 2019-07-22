@@ -3,8 +3,36 @@ Some description
 """
 
 import os
+import pickle
 import random
 import tensorflow as tf
+
+
+def save_loss_array(table, filename="model/loss_array"):
+    """An array tracking the loss over epochs is serialized using pickle and dumped
+    into an output file.
+
+    Args:
+        table: an array tracking the loss over epochs.
+        filename: the name of the file into which the serialized data is dumped.
+    """
+    outfile = open(filename, "wb")
+    pickle.dump(table, outfile)
+    outfile.close()
+
+
+def load_loss_array(filename="model/loss_array"):
+    """Deserializes a an array tracking the loss over epochs.
+
+    Args:
+        filename: the name of the file from which the data is to be deserialized.
+    Returns:
+        the deserialized array,
+    """
+    infile = open(filename, "rb")
+    new_dict = pickle.load(infile)
+    infile.close()
+    return new_dict
 
 
 def generate_file_list(file_path):
@@ -65,7 +93,7 @@ def main():
     # https://stackoverflow.com/questions/37340129/tensorflow-training-on-my-own-image
     # Evidently, it is not the optimal approach.
 
-    original = tf.read_file(PATH + random.sample(IMAGES, 1)[0])
+    original = tf.read_file(PATH + random.choice(IMAGES))
     original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
     original = tf.cast(original, tf.float32)
     noise = gaussian_noise(tf.shape(original), 0, 0.7)
@@ -76,10 +104,6 @@ def main():
     # Calculates real noise.
     flattened_output = tf.layers.flatten(output)
     flattened_noise = tf.reshape(noise, [-1, DIMENSION * DIMENSION])
-
-    # TODO: determine if the cast is optional
-    flattened_output = tf.cast(flattened_output, tf.float32)
-    flattened_noise = tf.cast(flattened_noise, tf.float32)
 
     # Calculate loss by comparing pixel differences.
     loss = tf.losses.mean_squared_error(
@@ -94,15 +118,16 @@ def main():
 
     with tf.Session() as sess:
 
-        sess.run(tf.global_variables_initializer())
-        # saver.restore(sess, "./model/model.ckpt")
+        # sess.run(tf.global_variables_initializer())
+        # loss_array = []
+        saver.restore(sess, "./model/model.ckpt")
+        loss_array = load_loss_array()
 
         for step in range(EPOCHS):
 
             sess.run(train_op)
 
             if step % 10 == 0:
-                # Preserves generated noise.
 
                 output_noise = tf.squeeze(tf.cast(output, tf.uint8), axis=0)
                 output_noise = tf.image.encode_jpeg(
@@ -122,14 +147,15 @@ def main():
                 writer = tf.write_file(
                     "./outputs/denoised_image_" + str(step) + ".png", denoised_image
                 )
-                sess.run(writer)
 
-                # TODO: store an array of loss over time (in pickle) for pretty graph.
+                sess.run(writer)
+                current_loss = loss.eval()
+
                 print(
                     "Step "
                     + str(step)
-                    + ", Minibatch Loss= "
-                    + "{:.4f}".format(loss.eval())
+                    + ", Loss = "
+                    + "{:.4f}".format(current_loss)
                     # + ", PSNR = "
                     # + "{:.4f}".format(
                     #     psnr(tf.squeeze(original), tf.squeeze(images - output))
@@ -137,7 +163,9 @@ def main():
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(tf.reduce_max(output).eval())
                 )
+                loss_array.append(current_loss)
                 saver.save(sess, "./model/model.ckpt")
+                save_loss_array(loss_array)
 
 
 if __name__ == "__main__":
