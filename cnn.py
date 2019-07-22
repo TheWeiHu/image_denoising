@@ -5,7 +5,7 @@ Some description
 import os
 import pickle
 import random
-import tensorflow as tfx
+import tensorflow as tf
 
 
 def save_loss_array(table, filename="model/loss_array"):
@@ -114,6 +114,7 @@ def main():
     original = tf.read_file(PATH + random.choice(IMAGES))
     original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
     original = tf.cast(original, tf.float32)
+
     noise = gaussian_noise(tf.shape(original), 0, 3)
     noisy_image = original + noise
 
@@ -176,9 +177,7 @@ def main():
                     + "{:.4f}".format(loss.eval())
                     + ", PSNR = "
                     + "{:.4f}".format(
-                        psnr.psnr(
-                            tf.squeeze(original), tf.squeeze(noisy_image - output)
-                        )
+                        psnr(tf.squeeze(original), tf.squeeze(noisy_image - output))
                     )
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(tf.reduce_max(output).eval())
