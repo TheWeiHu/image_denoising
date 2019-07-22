@@ -3,28 +3,26 @@ Some description
 """
 
 import os
-
-# TODO: eliminate use of cv2
-import cv2
-
-# import numpy as np
+import random
 import tensorflow as tf
 from psnr import psnr
-
-# TODO: extract [hyper]-parameters, add docstrings and type hints.
-DIMENSION = 256
-EPOCHS = 10000
-LR = 0.001  # TODO: diminish LR as training progresses
-BATCH_SIZE = 1
 
 
 def generate_file_list(file_path):
     result = []
-    # TODO: handle more than one image.
     for filename in os.listdir(file_path):
-        if not filename.startswith(".") and filename.endswith("01.png"):
+        if not filename.startswith("."):
             result.append(filename)
     return result
+
+
+# TODO: extract [hyper]-parameters, add docstrings and type hints.
+PATH = "./dataset/ground"
+IMAGES = generate_file_list(PATH)
+DIMENSION = 256
+EPOCHS = 10000
+LR = 0.001  # TODO: diminish LR as training progresses
+BATCH_SIZE = 1
 
 
 def cnn_model_fn(inputs):
@@ -64,27 +62,30 @@ def main():
     # https://stackoverflow.com/questions/37340129/tensorflow-training-on-my-own-image
     # Evidently, it is not the optimal approach.
 
-    file_list = generate_file_list("./dataset/noisy")
-    labels = []
-    for i in file_list:
-        labels.append(i[-6:])
-    dataset = tf.data.Dataset.from_tensor_slices((file_list, labels))
+    original = tf.read_file(random.sample(IMAGES, 1))
+    original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
+    gaussian_noise = []
+    noisy_image = original + gaussian_noise
 
-    def _parse_function(filename, label):
-        image_string = tf.read_file("./dataset/noisy/" + filename)
-        image_decoded = tf.image.decode_jpeg(
-            image_string, channels=1, dct_method="INTEGER_ACCURATE"
-        )
-        image = tf.cast(image_decoded, tf.float32)
-        return filename + "___" + label, image, label
+    output = cnn_model_fn(noisy_image)
 
-    dataset = dataset.map(_parse_function)
-    dataset = dataset.batch(BATCH_SIZE)
-    # A "one-shot" iterator does not support re-initialization.
-    iterator = dataset.make_one_shot_iterator()
-    F, images, labels = iterator.get_next()
+    # Calculates real noise.
+    flattened_output = tf.layers.flatten(output)
+    flattened_noise = tf.reshape(gaussian_noise, [-1, DIMENSION * DIMENSION])
 
-    output = cnn_model_fn(images)
+    # TODO: determine if the cast is optional
+    flattened_output = tf.cast(flattened_output, tf.float32)
+    flattened_noise = tf.cast(flattened_noise, tf.float32)
+
+    # Calculate loss by comparing pixel differences.
+    loss = tf.losses.mean_squared_error(
+        labels=flattened_noise, predictions=flattened_output
+    )
+
+    # Configure the Training Op
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=LR)
+    train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
+
     saver = tf.train.Saver()
 
     with tf.Session() as sess:
@@ -93,46 +94,29 @@ def main():
         # saver.restore(sess, "./model/model.ckpt")
 
         for step in range(EPOCHS):
-            # Read in the original image corresponding with the label.
-            original = tf.read_file(
-                "./dataset/ground/" + labels.eval()[0].decode("utf-8")
-            )
-            original = tf.image.decode_jpeg(
-                original, channels=1, dct_method="INTEGER_ACCURATE"
-            )
-            # Calculates real noise.
-            flattened_output = tf.layers.flatten(output)
-            flattened_original = tf.reshape(original, [-1, DIMENSION * DIMENSION])
-            flattened_image = tf.reshape(images, [-1, DIMENSION * DIMENSION])
-            flattened_original = tf.cast(flattened_original, tf.float32)
-            flattened_image = tf.cast(flattened_image, tf.float32)
-            real_noise = tf.math.subtract(flattened_original, flattened_image)
-
-            # Calculate loss by comparing pixel differences.
-            loss = tf.losses.mean_squared_error(
-                labels=real_noise, predictions=flattened_output
-            )
-
-            # Configure the Training Op
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=LR)
-            train_op = optimizer.minimize(
-                loss=loss, global_step=tf.train.get_global_step()
-            )
 
             sess.run(train_op)
 
             if step % 10 == 0:
                 # Preserves generated noise.
-                cv2.imwrite(
-                    "./outputs/generated_noise_" + str(step) + ".png",
-                    tf.squeeze(output).eval(),
-                )
-                # Preserves denoised image.
-                cv2.imwrite(
-                    "./outputs/denoised_image_" + str(step) + ".png",
-                    tf.squeeze(images - output).eval(),
-                )
 
+                output = tf.cast(output, tf.uint8)
+                output = tf.image.encode_jpeg(output, quality=100, format="grayscale")
+                writer = tf.write_file(
+                    "./outputs/generated_noise_" + str(step) + ".png", output
+                )
+                sess.run(writer)
+
+                denoised_image = tf.cast(noisy_image - output, tf.uint8)
+                denoised_image = tf.image.encode_jpeg(
+                    denoised_image, quality=100, format="grayscale"
+                )
+                writer = tf.write_file(
+                    "./outputs/denoised_image_" + str(step) + ".png", denoised_image
+                )
+                sess.run(writer)
+
+                # TODO: store an array of loss over time (in pickle) for pretty graph.
                 print(
                     "Step "
                     + str(step)
@@ -140,10 +124,7 @@ def main():
                     + "{:.4f}".format(loss.eval())
                     + ", PSNR = "
                     + "{:.4f}".format(
-                        psnr(
-                            tf.squeeze(original).eval(),
-                            tf.squeeze(images - output).eval(),
-                        )
+                        psnr(tf.squeeze(original), tf.squeeze(images - output))
                     )
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(tf.reduce_max(output).eval())
