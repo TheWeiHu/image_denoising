@@ -202,7 +202,7 @@ def main():
         tf.train.Saver().restore(sess, "./model/model.ckpt")
         loss_array = load_loss_array()
 
-        for step in range(EPOCHS):
+        for step in range(3430, EPOCHS):
 
             # Random ly selects a ground image.
             ground_image = PATH + random.choice(IMAGES)
