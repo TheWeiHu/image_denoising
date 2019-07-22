@@ -14,14 +14,10 @@ def psnr(im1, im2):
     """
     https://github.com/XiaoCode-er/python-PSNR/blob/master/psnr.py
     """
-    img_arr1 = numpy.array(im1).astype("float32")
-    img_arr2 = numpy.array(im2).astype("float32")
-    mse = tf.reduce_mean(tf.squared_difference(img_arr1, img_arr2))
-    result = tf.constant(255 ** 2, dtype=tf.float32) / mse
-    result = tf.constant(10, dtype=tf.float32) * log10(result)
-    with tf.Session():
-        result = result.eval()
-    return result
+    mse = tf.reduce_mean(tf.squared_difference(im1, im2))
+    result = tf.constant(255 ** 2, dtype=tf.float32) / mse  # TODO: Maybe fix pixel scale later?
+    result = tf.math.multiply(tf.constant(10, dtype=tf.float32), log10(result))
+    return result.eval()
 
 
 def main():

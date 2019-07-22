@@ -5,6 +5,7 @@ Some description
 import os
 import random
 import tensorflow as tf
+import psnr
 
 
 def generate_file_list(file_path):
@@ -68,7 +69,7 @@ def main():
     original = tf.read_file(PATH + random.sample(IMAGES, 1)[0])
     original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
     original = tf.cast(original, tf.float32)
-    noise = gaussian_noise(tf.shape(original), 0, 0.7)
+    noise = gaussian_noise(tf.shape(original), 0, 3)
     noisy_image = original + noise
 
     output = cnn_model_fn(noisy_image)
@@ -130,10 +131,10 @@ def main():
                     + str(step)
                     + ", Minibatch Loss= "
                     + "{:.4f}".format(loss.eval())
-                    # + ", PSNR = "
-                    # + "{:.4f}".format(
-                    #     psnr(tf.squeeze(original), tf.squeeze(images - output))
-                    # )
+                    + ", PSNR = "
+                    + "{:.4f}".format(
+                        psnr.psnr(tf.squeeze(original), tf.squeeze(noisy_image - output))
+                    )
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(tf.reduce_max(output).eval())
                 )
