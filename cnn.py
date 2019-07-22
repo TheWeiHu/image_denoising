@@ -6,6 +6,19 @@ import os
 import pickle
 import random
 import tensorflow as tf
+import psnr
+
+
+def psnr(im1, im2):
+    """
+    https://github.com/XiaoCode-er/python-PSNR/blob/master/psnr.py
+    """
+    mse = tf.reduce_mean(tf.squared_difference(im1, im2))
+    result = (
+        tf.constant(255 ** 2, dtype=tf.float32) / mse
+    )  # TODO: Maybe fix pixel scale later?
+    result = tf.math.multiply(tf.constant(10, dtype=tf.float32), log10(result))
+    return result.eval()
 
 
 def save_loss_array(table, filename="model/loss_array"):
@@ -96,7 +109,7 @@ def main():
     original = tf.read_file(PATH + random.choice(IMAGES))
     original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
     original = tf.cast(original, tf.float32)
-    noise = gaussian_noise(tf.shape(original), 0, 0.7)
+    noise = gaussian_noise(tf.shape(original), 0, 3)
     noisy_image = original + noise
 
     output = cnn_model_fn(noisy_image)
@@ -154,12 +167,14 @@ def main():
                 print(
                     "Step "
                     + str(step)
-                    + ", Loss = "
-                    + "{:.4f}".format(current_loss)
-                    # + ", PSNR = "
-                    # + "{:.4f}".format(
-                    #     psnr(tf.squeeze(original), tf.squeeze(images - output))
-                    # )
+                    + ", Minibatch Loss = "
+                    + "{:.4f}".format(loss.eval())
+                    + ", PSNR = "
+                    + "{:.4f}".format(
+                        psnr.psnr(
+                            tf.squeeze(original), tf.squeeze(noisy_image - output)
+                        )
+                    )
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(tf.reduce_max(output).eval())
                 )
