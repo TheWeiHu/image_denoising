@@ -5,7 +5,6 @@ Some description
 import os
 import random
 import tensorflow as tf
-from psnr import psnr
 
 
 def generate_file_list(file_path):
@@ -16,8 +15,12 @@ def generate_file_list(file_path):
     return result
 
 
+def gaussian_noise(shape, mean, std):
+    return tf.random_normal(shape=shape, mean=mean, stddev=std, dtype=tf.float32)
+
+
 # TODO: extract [hyper]-parameters, add docstrings and type hints.
-PATH = "./dataset/ground"
+PATH = "./dataset/ground/"
 IMAGES = generate_file_list(PATH)
 DIMENSION = 256
 EPOCHS = 10000
@@ -62,16 +65,17 @@ def main():
     # https://stackoverflow.com/questions/37340129/tensorflow-training-on-my-own-image
     # Evidently, it is not the optimal approach.
 
-    original = tf.read_file(random.sample(IMAGES, 1))
+    original = tf.read_file(PATH + random.sample(IMAGES, 1)[0])
     original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
-    gaussian_noise = []
-    noisy_image = original + gaussian_noise
+    original = tf.cast(original, tf.float32)
+    noise = gaussian_noise(tf.shape(original), 0, 0.7)
+    noisy_image = original + noise
 
     output = cnn_model_fn(noisy_image)
 
     # Calculates real noise.
     flattened_output = tf.layers.flatten(output)
-    flattened_noise = tf.reshape(gaussian_noise, [-1, DIMENSION * DIMENSION])
+    flattened_noise = tf.reshape(noise, [-1, DIMENSION * DIMENSION])
 
     # TODO: determine if the cast is optional
     flattened_output = tf.cast(flattened_output, tf.float32)
@@ -100,14 +104,18 @@ def main():
             if step % 10 == 0:
                 # Preserves generated noise.
 
-                output = tf.cast(output, tf.uint8)
-                output = tf.image.encode_jpeg(output, quality=100, format="grayscale")
+                output_noise = tf.squeeze(tf.cast(output, tf.uint8), axis=0)
+                output_noise = tf.image.encode_jpeg(
+                    output_noise, quality=100, format="grayscale"
+                )
                 writer = tf.write_file(
-                    "./outputs/generated_noise_" + str(step) + ".png", output
+                    "./outputs/generated_noise_" + str(step) + ".png", output_noise
                 )
                 sess.run(writer)
 
-                denoised_image = tf.cast(noisy_image - output, tf.uint8)
+                denoised_image = tf.squeeze(
+                    tf.cast(noisy_image - output, tf.uint8), axis=0
+                )
                 denoised_image = tf.image.encode_jpeg(
                     denoised_image, quality=100, format="grayscale"
                 )
@@ -122,10 +130,10 @@ def main():
                     + str(step)
                     + ", Minibatch Loss= "
                     + "{:.4f}".format(loss.eval())
-                    + ", PSNR = "
-                    + "{:.4f}".format(
-                        psnr(tf.squeeze(original), tf.squeeze(images - output))
-                    )
+                    # + ", PSNR = "
+                    # + "{:.4f}".format(
+                    #     psnr(tf.squeeze(original), tf.squeeze(images - output))
+                    # )
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(tf.reduce_max(output).eval())
                 )
