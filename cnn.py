@@ -22,6 +22,7 @@ import tensorflow as tf
 # TODO: reduce I/O time by keeping images in main memory -- memoization
 # TODO: restructure as a class
 # TODO: test on original images (probably seperate file)
+# https://danijar.com/structuring-your-tensorflow-models/
 
 
 def save_loss_array(table, filename="model/loss_array"):
@@ -209,10 +210,10 @@ def main():
     with tf.Session() as sess:
 
         # Creates new model or restores previouslt saved model.
-        sess.run(tf.global_variables_initializer())
-        loss_array = []
-        # tf.train.Saver().restore(sess, "./model/model.ckpt")
-        # loss_array = load_loss_array()
+        # sess.run(tf.global_variables_initializer())
+        # loss_array = []
+        tf.train.Saver().restore(sess, "./model/model.ckpt")
+        loss_array = load_loss_array()
 
         for step in range(EPOCHS):
 
