@@ -265,3 +265,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# TODO: 16 images, patch the images, increase batch size (go towards expected gradient decent, multiple gpu, 10
