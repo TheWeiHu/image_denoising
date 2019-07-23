@@ -108,13 +108,14 @@ def gaussian_noise(shape, mean, std):
 
 
 # Algorithm Hyperparameters:
+# TODO: optimize for parallelized training on gpu
 PATH = "./dataset/ground/"
 IMAGES = generate_file_list(PATH)
 DIMENSION = 256
 EPOCHS = 10000
 SCALE = 255.0  # Note the use of a float to prevent integer division.
 LR = 0.001  # TODO: diminish LR as training progresses?
-BATCH_SIZE = 1
+BATCH_SIZE = 128  # TODO: increase batch size?
 STDV = 25  # The standard deviation used for the gaussian noise.
 
 
@@ -202,7 +203,7 @@ def main():
         tf.train.Saver().restore(sess, "./model/model.ckpt")
         loss_array = load_loss_array()
 
-        for step in range(3550, EPOCHS):
+        for step in range(4180, EPOCHS):
 
             # Random ly selects a ground image.
             ground_image = PATH + random.choice(IMAGES)
@@ -229,6 +230,11 @@ def main():
                     + ", Brightest Pixel = "
                     + "{:.4f}".format(
                         tf.reduce_max(output).eval(feed_dict={path: ground_image})
+                        * SCALE
+                    )
+                    + ", Darkest Pixel = "
+                    + "{:.4f}".format(
+                        tf.reduce_min(output).eval(feed_dict={path: ground_image})
                         * SCALE
                     )
                 )
@@ -265,3 +271,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
