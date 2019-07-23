@@ -18,6 +18,11 @@ import pickle
 import random
 import tensorflow as tf
 
+# TODO: parallelized training on gpu.
+# TODO: reduce I/O time by keeping images in main memory -- memoization
+# TODO: restructure as a class
+# TODO: test on original images (probably seperate file)
+
 
 def save_loss_array(table, filename="model/loss_array"):
     """An array tracking the loss over epochs is serialized using pickle and dumped
@@ -108,18 +113,19 @@ def gaussian_noise(shape, mean, std):
 
 
 # Algorithm Hyperparameters:
-# TODO: optimize for parallelized training on gpu
-PATH = "./dataset/ground/"
-IMAGES = generate_file_list(PATH)
-DIMENSION = 256
+PATCH_PATH = "./dataset/patch/"
+IMAGE_PATH = "./dataset/ground/"
+IMAGES = generate_file_list(IMAGE_PATH)
+PATCHES = generate_file_list(PATCH_PATH)
+DIMENSION = 64
 EPOCHS = 10000
 SCALE = 255.0  # Note the use of a float to prevent integer division.
-LR = 0.001  # TODO: diminish LR as training progresses?
-BATCH_SIZE = 128  # TODO: increase batch size?
+LR = 0.001  # Updated using Adam Optimizer
+BATCH_SIZE = 128
 STDV = 25  # The standard deviation used for the gaussian noise.
 
 
-def cnn_model_fn(inputs):
+def cnn_model_fn(inputs, batch_size=BATCH_SIZE):
     """ A deep convolutional neural network with seventeen layers, with batch
     normalization and relu activation. The hyperparameters are those used in the
     authors' implementation.
@@ -135,7 +141,7 @@ def cnn_model_fn(inputs):
         noise in the image.
     """
     # Input Layer
-    input_layer = tf.reshape(inputs, [BATCH_SIZE, DIMENSION, DIMENSION, 1])
+    input_layer = tf.reshape(inputs, [batch_size, DIMENSION, DIMENSION, 1])
     # First Outer Convolutional Layer
     current = tf.layers.conv2d(
         inputs=input_layer,
@@ -173,11 +179,19 @@ def main():
     """ Implements the deep convolutional neural network for denoising images based on
     the paper by Zhang et al.
     """
-    # Loads in randomly chosen ground image.
-    path = tf.placeholder(tf.string)
-    original = tf.read_file(path)
-    original = tf.image.decode_jpeg(original, channels=1, dct_method="INTEGER_ACCURATE")
-    original = tf.math.divide(tf.cast(original, tf.float32), SCALE)
+    # Loads in batch of randonly chosen patches.
+    input_images = [tf.placeholder(tf.string) for _ in range(BATCH_SIZE)]
+
+    # Load in an "concatenate" the selected patches
+    original = []
+    for patch in input_images:
+        current = tf.read_file(patch)
+        current = tf.image.decode_jpeg(
+            current, channels=1, dct_method="INTEGER_ACCURATE"
+        )
+        current = tf.math.divide(tf.cast(current, tf.float32), SCALE)
+        original.append(current)
+    original = tf.stack(original)
 
     # Generates Gaussian noise and adds it to the image.
     noise = tf.math.divide(gaussian_noise(tf.shape(original), 0, STDV), SCALE)
@@ -186,87 +200,59 @@ def main():
     # Inputs noisy image into the neural network.
     output = cnn_model_fn(noisy_image)
     # Calculate loss by comparing pixel differences.
-    loss = tf.losses.mean_squared_error(
-        labels=tf.reshape(noise, [-1, DIMENSION * DIMENSION]),
-        predictions=tf.layers.flatten(output),
-    )
+    loss = tf.losses.mean_squared_error(labels=noise, predictions=output)
     # Configure the Training Op
-    train_op = tf.train.GradientDescentOptimizer(learning_rate=LR).minimize(
+    train_op = tf.train.AdamOptimizer(learning_rate=LR).minimize(
         loss=loss, global_step=tf.train.get_global_step()
     )
 
     with tf.Session() as sess:
 
         # Creates new model or restores previouslt saved model.
-        # sess.run(tf.global_variables_initializer())
-        # loss_array = []
-        tf.train.Saver().restore(sess, "./model/model.ckpt")
-        loss_array = load_loss_array()
+        sess.run(tf.global_variables_initializer())
+        loss_array = []
+        # tf.train.Saver().restore(sess, "./model/model.ckpt")
+        # loss_array = load_loss_array()
 
-        for step in range(4180, EPOCHS):
+        for step in range(EPOCHS):
 
-            # Random ly selects a ground image.
-            ground_image = PATH + random.choice(IMAGES)
+            # Randomly selects a ground image.
+            ground_patches = [
+                PATCH_PATH + random.choice(PATCHES) for _ in range(BATCH_SIZE)
+            ]
             # Runs training process.
-            sess.run(train_op, feed_dict={path: ground_image})
+            _, _loss = sess.run(
+                [train_op, loss],
+                feed_dict={i: d for i, d in zip(input_images, ground_patches)},
+            )
+            loss_array.append(_loss)
 
             if step % 10 == 0:
-                # Calculate the current loss -- which is to be preserved in array
-                # (to be later used for graphing).
-                current_loss = loss.eval(feed_dict={path: ground_image})
-                loss_array.append(current_loss)
                 # Log the current training status.
+                _psnr, _max, _min = sess.run(
+                    [
+                        psnr(tf.squeeze(original), tf.squeeze(noisy_image - output)),
+                        tf.reduce_max(output),
+                        tf.reduce_min(output),
+                    ],
+                    feed_dict={i: d for i, d in zip(input_images, ground_patches)},
+                )
                 print(
                     "Step "
                     + str(step)
                     + ", Minibatch Loss = "
-                    + "{:.8f}".format(loss.eval(feed_dict={path: ground_image}))
+                    + "{:.8f}".format(_loss)
                     + ", PSNR = "
-                    + "{:.4f}".format(
-                        psnr(
-                            tf.squeeze(original), tf.squeeze(noisy_image - output)
-                        ).eval(feed_dict={path: ground_image})
-                    )
+                    + "{:.4f}".format(_psnr)
                     + ", Brightest Pixel = "
-                    + "{:.4f}".format(
-                        tf.reduce_max(output).eval(feed_dict={path: ground_image})
-                        * SCALE
-                    )
+                    + "{:.4f}".format(_max * SCALE)
                     + ", Darkest Pixel = "
-                    + "{:.4f}".format(
-                        tf.reduce_min(output).eval(feed_dict={path: ground_image})
-                        * SCALE
-                    )
+                    + "{:.4f}".format(_min * SCALE)
                 )
 
                 # Serialize trained network and the progression of loss values.
                 tf.train.Saver().save(sess, "./model/model.ckpt")
                 save_loss_array(loss_array)
-
-            if step % 100 == 0:
-                # Preserve a visual representation of the generated noise.
-                output_noise = tf.squeeze(
-                    tf.cast(tf.math.multiply(output, SCALE), tf.uint8), axis=0
-                )
-                output_noise = tf.image.encode_jpeg(
-                    output_noise, quality=100, format="grayscale"
-                )
-                writer = tf.write_file(
-                    "./outputs/generated_noise_" + str(step) + ".png", output_noise
-                )
-                sess.run(writer, feed_dict={path: ground_image})
-                # Preserve a visual representation of the denoised image.
-                denoised_image = tf.squeeze(
-                    tf.cast(tf.math.multiply(noisy_image - output, SCALE), tf.uint8),
-                    axis=0,
-                )
-                denoised_image = tf.image.encode_jpeg(
-                    denoised_image, quality=100, format="grayscale"
-                )
-                writer = tf.write_file(
-                    "./outputs/denoised_image_" + str(step) + ".png", denoised_image
-                )
-                sess.run(writer, feed_dict={path: ground_image})
 
 
 if __name__ == "__main__":
