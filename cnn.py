@@ -18,11 +18,7 @@ import pickle
 import random
 import tensorflow as tf
 
-# TODO: parallelized training on gpu.
-# TODO: reduce I/O time by keeping images in main memory -- memoization
-# TODO: restructure as a class
 # TODO: test on original images (probably seperate file)
-# https://danijar.com/structuring-your-tensorflow-models/
 
 
 def save_loss_array(table, filename="model/loss_array"):
@@ -143,7 +139,7 @@ def cnn_model_fn(inputs, batch_size=BATCH_SIZE):
     """
     # Input Layer
     input_layer = tf.reshape(inputs, [batch_size, DIMENSION, DIMENSION, 1])
-    # First Outer Convolutional Layer
+    # First Outer Convolutional Layer:
     current = tf.layers.conv2d(
         inputs=input_layer,
         filters=64,
@@ -165,7 +161,7 @@ def cnn_model_fn(inputs, batch_size=BATCH_SIZE):
             inputs=current, axis=3, momentum=0.0, epsilon=0.0001
         )
         current = tf.nn.relu(current)
-    # Second Outer Convolutional Layer
+    # Second Outer Convolutional Layer:
     conv_out_2 = tf.layers.conv2d(
         inputs=current,
         filters=1,
@@ -176,30 +172,10 @@ def cnn_model_fn(inputs, batch_size=BATCH_SIZE):
     return conv_out_2
 
 
-def main():
-    """ Implements the deep convolutional neural network for denoising images based on
-    the paper by Zhang et al.
+def train(noise, input_images, original, noisy_image, output):
     """
-    # Loads in batch of randonly chosen patches.
-    input_images = [tf.placeholder(tf.string) for _ in range(BATCH_SIZE)]
-
-    # Load in an "concatenate" the selected patches
-    original = []
-    for patch in input_images:
-        current = tf.read_file(patch)
-        current = tf.image.decode_jpeg(
-            current, channels=1, dct_method="INTEGER_ACCURATE"
-        )
-        current = tf.math.divide(tf.cast(current, tf.float32), SCALE)
-        original.append(current)
-    original = tf.stack(original)
-
-    # Generates Gaussian noise and adds it to the image.
-    noise = tf.math.divide(gaussian_noise(tf.shape(original), 0, STDV), SCALE)
-    noisy_image = original + noise
-
-    # Inputs noisy image into the neural network.
-    output = cnn_model_fn(noisy_image)
+    Description
+    """
     # Calculate loss by comparing pixel differences.
     loss = tf.losses.mean_squared_error(labels=noise, predictions=output)
     # Configure the Training Op
@@ -254,6 +230,43 @@ def main():
                 # Serialize trained network and the progression of loss values.
                 tf.train.Saver().save(sess, "./model/model.ckpt")
                 save_loss_array(loss_array)
+
+
+def evaluate():
+    """
+    Description
+    """
+    with tf.Session() as sess:
+        tf.train.Saver().restore(sess, "./model/model.ckpt")
+
+
+def main():
+    """ Implements the deep convolutional neural network for denoising images based on
+    the paper by Zhang et al.
+    """
+    # Loads in batch of randonly chosen patches.
+    input_images = [tf.placeholder(tf.string) for _ in range(BATCH_SIZE)]
+
+    # Loads in and "concatenates" the selected patches.
+    original = []
+    for patch in input_images:
+        current = tf.read_file(patch)
+        current = tf.image.decode_jpeg(
+            current, channels=1, dct_method="INTEGER_ACCURATE"
+        )
+        current = tf.math.divide(tf.cast(current, tf.float32), SCALE)
+        original.append(current)
+    original = tf.stack(original)
+
+    # Generates Gaussian noise and adds it to the image.
+    noise = tf.math.divide(gaussian_noise(tf.shape(original), 0, STDV), SCALE)
+    noisy_image = original + noise
+
+    # Inputs noisy image into the neural network.
+    output = cnn_model_fn(noisy_image)
+
+    # Trains the model.
+    train(noise, input_images, original, noisy_image, output)
 
 
 if __name__ == "__main__":

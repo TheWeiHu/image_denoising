@@ -1,4 +1,25 @@
-### NOT YET IMPLEMENTED!
+"""
+Implementation of a deep convolutional neural network for denoising images based on the
+paper by Zhang et al. [https://www.ncbi.nlm.nih.gov/pubmed/28166495]
+
+The authors' original implementation can be found here [https://github.com/cszn/DnCNN].
+
+This implentation serves as a baseline against which our proposed method will be
+evaluated.
+
+Isak Persson
+Wei Hu
+
+22 July 2019
+"""
+
+import os
+import pickle
+import random
+import tensorflow as tf
+
+from cnn_train import psnr, generate_file_list, gaussian_noise
+
 
 
 def generate_noise(path_to_image, output, step):
