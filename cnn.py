@@ -117,6 +117,7 @@ PARSER.add_argument(
     action="store_false",
     help="evaluation mode (attempts to denoise images from the test set)",
 )
+# TODO: Set up both grayscale and color mode.
 PARSER.set_defaults(train=True)
 ARGS = PARSER.parse_args()
 
