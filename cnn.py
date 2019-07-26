@@ -89,7 +89,7 @@ def generate_file_list(file_path):
     result = []
     for filename in os.listdir(file_path):
         # Ignores irrelevant files.
-        if not filename.startswith("."):
+        if filename.endswith(".png"):
             result.append(filename)
     return result
 
@@ -112,12 +112,6 @@ def gaussian_noise(shape, mean, std):
 # Program Parameters:
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument(
-    "--train",
-    dest="train",
-    action="store_true",
-    help="default mode (used to train model)",
-)
-PARSER.add_argument(
     "--evaluate",
     dest="train",
     action="store_false",
@@ -126,7 +120,7 @@ PARSER.add_argument(
 PARSER.set_defaults(train=True)
 ARGS = PARSER.parse_args()
 
-# Algorithm Hyperparameters:
+# Algorithm Hyperparameters
 PATCH_PATH = "./dataset/patch/"
 TEST_PATH = "./dataset/test/"
 TESTS = generate_file_list(TEST_PATH)
@@ -182,7 +176,7 @@ def cnn_model_fn(inputs):
     # Second Outer Convolutional Layer:
     conv_out_2 = tf.layers.conv2d(
         inputs=current,
-        filters=1,
+        filters=3,
         kernel_size=[3, 3],
         kernel_initializer="Orthogonal",
         padding="same",
@@ -284,9 +278,7 @@ def evaluate(loss, input_image, original, noisy_image, output):
         output_noise = tf.squeeze(
             tf.cast(tf.math.multiply(output, SCALE), tf.uint8), axis=0
         )
-        output_noise = tf.image.encode_jpeg(
-            output_noise, quality=100, format="grayscale"
-        )
+        output_noise = tf.image.encode_jpeg(output_noise, quality=100)
         noise_writer = tf.write_file(
             "./outputs/generated_noise_" + sample_image[:7] + ".png", output_noise
         )
@@ -295,18 +287,14 @@ def evaluate(loss, input_image, original, noisy_image, output):
         denoised_image = tf.squeeze(
             tf.cast(tf.math.multiply(noisy_image - output, SCALE), tf.uint8), axis=0
         )
-        denoised_image = tf.image.encode_jpeg(
-            denoised_image, quality=100, format="grayscale"
-        )
+        denoised_image = tf.image.encode_jpeg(denoised_image, quality=100)
         denoise_writer = tf.write_file(
             "./outputs/denoised_image_" + sample_image[:7] + ".png", denoised_image
         )
 
         # Preserves the original noisy image.
         _noisy_image = tf.cast(tf.math.multiply(noisy_image, SCALE), tf.uint8)
-        _noisy_image = tf.image.encode_jpeg(
-            _noisy_image, quality=100, format="grayscale"
-        )
+        _noisy_image = tf.image.encode_jpeg(_noisy_image, quality=100)
         noisy_image_writer = tf.write_file(
             "./outputs/noisy_image_" + sample_image[:7] + ".png", _noisy_image
         )
@@ -329,7 +317,7 @@ def main():
         input_image = tf.placeholder(tf.string)
         original = tf.read_file(input_image)
         original = tf.image.decode_jpeg(
-            original, channels=1, dct_method="INTEGER_ACCURATE"
+            original, channels=3, dct_method="INTEGER_ACCURATE"
         )
         original = tf.math.divide(tf.cast(original, tf.float32), SCALE)
     else:
@@ -340,7 +328,7 @@ def main():
         for patch in input_images:
             current = tf.read_file(patch)
             current = tf.image.decode_jpeg(
-                current, channels=1, dct_method="INTEGER_ACCURATE"
+                current, channels=3, dct_method="INTEGER_ACCURATE"
             )
             current = tf.math.divide(tf.cast(current, tf.float32), SCALE)
             original.append(current)

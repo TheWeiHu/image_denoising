@@ -19,15 +19,15 @@ def make_tiles(input_path, save_path, dimension):
         dimension: the prescribed dimension of the cut up tiles.
     """
     for filename in os.listdir(input_path):
-        if not filename.startswith("."):
+        if filename.endswith(".png"):
             image_path = input_path + filename
 
             width, height = Image.open(image_path).size
 
             # Ensures image is square.
-            assert width == height
+            # assert width == height
             # Ensures the image can be cut into the desired dimensions.
-            assert width % dimension == 0
+            # assert width % dimension == 0
             n_tiles = (width / dimension) ** 2
 
             tiles = image_slicer.slice(image_path, n_tiles, save=False)
