@@ -21,7 +21,7 @@ def gen_cnn_model_fn(inputs):
     https://www.tensorflow.org/tutorials/estimators/cnn
 
     Args:
-        input: data passed to the input layer of the neural network -- in our case, it
+        inputs: data passed to the input layer of the neural network -- in our case, it
         is the noisy image.
     Returns:
         the output of the neural network -- for us, it represents the denoised image.
@@ -60,7 +60,7 @@ def gen_cnn_model_fn(inputs):
     return inputs - current
 
 
-def d_decoder(inputs, batch_size=64, size=64, reuse=True):
+def d_decoder(inputs, batch_size=64, size=64, channels=3, encoded_channels=128, reuse=True):
     """ The decoder part of the discriminator of the MMD GAN. It takes a tensor 
     of (batch_size, 1, 1, 128) and decodes it through a deconvolutional network 
     to a (batch_size, size, size, 3) tensor
@@ -68,7 +68,12 @@ def d_decoder(inputs, batch_size=64, size=64, reuse=True):
         inputs: Encoded images which will be passed to the input layer of the 
         neural network, required size of data is (batch_size, 1, 1, 128)
         batch_size: The size of the batch feed into the decoder
-        size: the size of a decoded image i.e. the wanted output size
+        size: the size of a decoded image i.e. the returned images' width and height
+        channels: channels of returned images (3 for rgb)
+        encoded_channels: the channel size of the encoded images
+        reuse: True if you want to reuse the variables and not initialize new ones.
+    return:
+        Tensor of size (batch_size, size, size, 3)
     """
 
     with tf.variable_scope("d_decoder") as scope:
@@ -76,9 +81,10 @@ def d_decoder(inputs, batch_size=64, size=64, reuse=True):
             scope.reuse_variables()
 
         current = tf.reshape(
-            inputs, shape=[batch_size, 1, 1, 128]
-        )  # TODO: the shape should be an argument of the function.
+            inputs, shape=[batch_size, 1, 1, encoded_channels]
+        )
 
+        # Builds the number of deconvolutional layers to produce images with the size specified in the arguments
         i = np.log2(size) - 1
         while i >= 0:
             current = tf.layers.conv2d_transpose(
@@ -96,9 +102,10 @@ def d_decoder(inputs, batch_size=64, size=64, reuse=True):
             current = tf.nn.relu(current)
             i -= 1
 
+        # Adds an extra layer to get the right amount of channels
         current = tf.layers.conv2d_transpose(
             current,
-            filters=3,
+            filters=channels,
             kernel_size=2,
             kernel_initializer="orthogonal",
             strides=1,
@@ -110,12 +117,16 @@ def d_decoder(inputs, batch_size=64, size=64, reuse=True):
         return output
 
 
-def d_encoder(inputs, batch_size=64, size=64, reuse=True):
-    """
-    Used to encode images from the generator and the ground truth.
-    Output will be used as input for the kernels.
-    :param x: batch_size * 64 * 64 * channels
-    :return: batch_size * 1 * 1 * k
+def d_encoder(inputs, batch_size=64, size=64, channels=3,  reuse=True):
+    """ The encoder part of the discriminator. Encode images through a convolutional neural network.
+    Args:
+        inputs: tensor of size (batch_size, size, size, channels). Size should be a power of 2
+        batch_size: size of batch.
+        size: width and height of images. Size should be a power of 2
+        channels: number of channels in image (rbg is 3).
+        reuse: True if you want to reuse the variables and not initialize new ones.
+    return:
+        encoded image with size 1 in width and height. Channel size depends on input image size
     """
 
     with tf.variable_scope("d_encoder") as scope:
@@ -126,10 +137,11 @@ def d_encoder(inputs, batch_size=64, size=64, reuse=True):
             inputs = tf.expand_dims(inputs, 0)
 
         current = tf.reshape(
-            inputs, shape=[batch_size, size, size, 3]
-        )  # TODO: the shape/isize should be an argument of the function.
+            inputs, shape=[batch_size, size, size, channels]
+        )
         assert size % 16 == 0
 
+        # Creates convolutional layers until the tensors width and height have size 1
         i = 0
         while size / 2 ** (i) > 1:
             current = tf.layers.batch_normalization(
