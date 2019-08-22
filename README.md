@@ -1,19 +1,14 @@
 # image_denoising
-A collection of different approaches for image denoising:
+Three different approaches:
 
 - the classic baseline using a deep convolutional neural network
-- an altered version using a residual neural network
-- a novel approach using a generative adverserial network and a discriminator which uses kernel maximum mean discrepency. 
+- an approach using a classic generative adverserial network
+- a novel approach using a generative adverserial network and a discriminator which uses kernel maximum mean discrepency
 
 Shanghai Jiao Tong University
 School of Electronic Information and Electrical Engineering
-
 Project 19: Image Denoising Advanced Kernel Methods in Machine Learning
-
 Instructed by Professor Xiaolin Huang
 
-MAT 4XXX / RCH 3010
-University of Ottawa
-
-DD 2430
-KTH Royal Institute of Technology
+University of Ottawa MAT 4XXX / RCH 3010
+KTH Royal Institute of Technology DD 2430
