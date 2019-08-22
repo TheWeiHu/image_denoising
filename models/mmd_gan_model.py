@@ -61,9 +61,14 @@ def gen_cnn_model_fn(inputs):
 
 
 def d_decoder(inputs, batch_size=64, size=64, reuse=True):
-    """
-    :param x: (batch size, 1, 1, ???)
-    :return: (batch size, 64, 64, 3)
+    """ The decoder part of the discriminator of the MMD GAN. It takes a tensor 
+    of (batch_size, 1, 1, 128) and decodes it through a deconvolutional network 
+    to a (batch_size, size, size, 3) tensor
+    Args:
+        inputs: Encoded images which will be passed to the input layer of the 
+        neural network, required size of data is (batch_size, 1, 1, 128)
+        batch_size: The size of the batch feed into the decoder
+        size: the size of a decoded image i.e. the wanted output size
     """
 
     with tf.variable_scope("d_decoder") as scope:
