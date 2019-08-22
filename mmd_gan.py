@@ -1,10 +1,13 @@
 """
-A method based on generative...
+An novel image denoising method using a generative adverserial network which uses
+kernal maxmimum mean discrepancy (MMD-GAN).
+
+Inspired by [https://arxiv.org/abs/1705.08584] and [https://arxiv.org/abs/1801.01401].
 
 Isak Persson
 Wei Hu
 
-5 August 2019
+15 August 2019
 """
 
 import tensorflow as tf
@@ -19,9 +22,10 @@ GEN_LR = 0.001
 DIS_LR = 0.001
 BATCH_SIZE = 64
 STDV = 25  # The standard deviation used for the gaussian noise.
-lambda_x = 8.0
-lambda_y = 8.0
-lambda_rg = 16.0
+
+# MMD Loss Hyperparameters:
+LAMBDA_X = 8.0
+LAMBDA_Y = 8.0
 
 
 def train(gen_loss, dis_loss, summary):
@@ -99,11 +103,10 @@ def main():
     l2_x = tf.losses.mean_squared_error(original, f_dec_x_d)
     l2_y = tf.losses.mean_squared_error(y, f_dec_y_d)
 
-
     mmd_loss = kernels.mmd2(tf.squeeze(f_enc_x_d), tf.squeeze(f_enc_y_d))
 
-    gen_loss = mmd_loss 
-    tot_loss = mmd_loss - lambda_x * l2_x - lambda_y * l2_y
+    gen_loss = mmd_loss # TODO: add regularization loss, style loss, etc.?
+    tot_loss = mmd_loss - LAMBDA_X * l2_x - LAMBDA_Y * l2_y
 
     image_summaries = {
         "Original Image": original,

@@ -1,3 +1,9 @@
+"""
+A generator and an encoder/decoder pair which compose a generative adverserial network
+that is trained using kernel maximum mean discrepency used for denoising images.
+"""
+
+
 import tensorflow as tf
 import numpy as np
 
@@ -7,6 +13,10 @@ def gen_cnn_model_fn(inputs):
     normalization and relu activation. The hyperparameters are those used in the
     authors' implementation.
 
+    NOTE: this is the essentially the same model as the one used in the DnCNN, except,
+    we return "inputs - output" instead of just "output"! This returns the denoised
+    image instead of the generated noise.
+
     Inspired by:
     https://www.tensorflow.org/tutorials/estimators/cnn
 
@@ -14,7 +24,7 @@ def gen_cnn_model_fn(inputs):
         input: data passed to the input layer of the neural network -- in our case, it
         is the noisy image.
     Returns:
-        the output of the neural network -- in our case, it represents the denoised image.
+        the output of the neural network -- for us, it represents the denoised image.
     """
     # Sets batch size to one, if it is only a single image.
     if len(inputs.get_shape()) < 4:
@@ -62,7 +72,7 @@ def d_decoder(inputs, batch_size=64, size=64, reuse=True):
 
         current = tf.reshape(
             inputs, shape=[batch_size, 1, 1, 128]
-        )  # TODO: softcode shape (arg in function)
+        )  # TODO: the shape should be an argument of the function.
 
         i = np.log2(size) - 1
         while i >= 0:
@@ -96,7 +106,7 @@ def d_decoder(inputs, batch_size=64, size=64, reuse=True):
 
 
 def d_encoder(inputs, batch_size=64, size=64, reuse=True):
-    """'
+    """
     Used to encode images from the generator and the ground truth.
     Output will be used as input for the kernels.
     :param x: batch_size * 64 * 64 * channels
@@ -112,9 +122,9 @@ def d_encoder(inputs, batch_size=64, size=64, reuse=True):
 
         current = tf.reshape(
             inputs, shape=[batch_size, size, size, 3]
-        )  # TODO: softcode shape (arg in function) + isize
-
+        )  # TODO: the shape/isize should be an argument of the function.
         assert size % 16 == 0
+
         i = 0
         while size / 2 ** (i) > 1:
             current = tf.layers.batch_normalization(
