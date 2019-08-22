@@ -1,5 +1,6 @@
 """
-Deep convolutional neural network model.
+Deep convolutional neural network model, which takes in a noisy input image, and
+attempts to produce an output which represents the noise in the image.
 """
 
 import tensorflow as tf

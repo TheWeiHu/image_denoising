@@ -148,8 +148,12 @@ def create_dataset_iterator(pathes, batch_size=64):
 
 
 def write_image(path, image):
-    """
-    Save images...
+    """ Create a node which will write the given image to file, when evaluated.
+
+    Args:
+        path: the location where the image will be saved.
+    Returns:
+        a graph node which will write to file when evaluated.
     """
     image = tf.image.encode_jpeg(image, quality=100)
     return tf.io.write_file(path, image)

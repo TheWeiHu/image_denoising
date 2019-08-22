@@ -1,5 +1,9 @@
 """
-A method based on generative...
+An image denoising method based on the original generative adverserial network designed
+by Goodfellow et al. [https://papers.nips.cc/paper/5423-generative-adversarial-nets.pdf]
+
+Our code was in part inspired by this research project
+[https://github.com/manumathewthomas/ImageDenoisingGAN].
 
 Isak Persson
 Wei Hu
@@ -80,9 +84,11 @@ def main():
     noisy_image = original + noise
     gen_output = gen_cnn_model_fn(noisy_image)
 
+    # Creates the discriminator.
     discriminator_layers = {}
     dis_ground = dis_cnn_model_fn(original, discriminator_layers)
     dis_gen = dis_cnn_model_fn(gen_output, discriminator_layers)
+
     # Loss Definitions
     gen_loss = -tf.reduce_mean(tf.log(tf.clip_by_value(dis_gen, 10e-10, 1.0)))
     dis_loss = -tf.reduce_mean(
@@ -103,6 +109,7 @@ def main():
         "Brightest Pixel in Noise": tf.reduce_max(noisy_image - gen_output) * 255,
         "Darkest Pixel in Noise": tf.reduce_min(noisy_image - gen_output) * 255,
     }
+    # Creates a summary to be displayed on TensorBoard.
     summary = utils.create_summary(image_summaries, scalar_summaries)
     train(gen_loss, dis_loss, summary)
 

@@ -179,6 +179,7 @@ def main():
             "PSNR": utils.psnr(tf.squeeze(original), tf.squeeze(noisy_image - output)),
             "Loss": loss,
         }
+        # Creates a summary to be displayed on TensorBoard.
         summary = utils.create_summary(image_summaries, scalar_summaries)
         train(loss, original, noisy_image, output, summary)
 

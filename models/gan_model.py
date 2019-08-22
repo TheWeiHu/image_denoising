@@ -1,20 +1,27 @@
 """
-Inspired by: 
-
+A generator and a discriminator which compose a generative adverserial network used for
+denoising images.
 """
 
 import tensorflow as tf
 
 
 def gen_cnn_model_fn(inputs):
-    """ 
+    """ A neural network acting as the generator in the generative adverserial network.
+    Inspired by U-Net, and ResNet, tt uses, convolutional layers, residual layers, and
+    deconvolutional layers to produce a denoised image.
+
+    Inspired by:
+    https://github.com/manumathewthomas/ImageDenoisingGAN
+    
+    BUT IS BEING MODIIFIED to use a U-NET structure:
+    https://arxiv.org/abs/1505.04597
 
     Args:
         input: data passed to the input layer of the neural network -- in our case, it
         is the noisy image.
     Returns:
-        the output of the neural network -- in our case, it represents the predicted
-        noise in the image.
+        the output of the neural network -- for us, it represents the denoised image.
     """
     # Sets batch size to one, if it is only a single image.
     if len(inputs.get_shape()) < 4:
@@ -48,6 +55,7 @@ def gen_cnn_model_fn(inputs):
                 )(current)
                 current = tf.nn.leaky_relu(current)
             current = tf.identity(inputs) + current
+    # TODO: Use a U-Net based structure for deconvolution.
     # Final Convolutional Layer:
     output = tf.keras.layers.Conv2D(
         filters=3, kernel_size=[3, 3], kernel_initializer="Orthogonal", padding="same"
@@ -56,10 +64,18 @@ def gen_cnn_model_fn(inputs):
 
 
 def get_dis_conv(layers, name, filters, strides, kernel):
-    """ Reusing...
+    """ Creates a new convolutional layer with the given name, if a layer of the same
+    name does not already exists.
+    
+    Args:
+        layers: a dictionary of all the layers created, with the key being their names.
+        name: the name of the layer which we are trying to retrieve.
+    Returns:
+        a convolutional layer with the given name.
     """
     if not name in layers:
         padding = "same"
+        # Using "valid" padding in the outermost layer reduces the dimension to 1.
         if name == "output_layer_conv":
             padding = "valid"
         temp = tf.keras.layers.Conv2D(
@@ -74,7 +90,14 @@ def get_dis_conv(layers, name, filters, strides, kernel):
 
 
 def get_dis_bn(layers, name):
-    """ Reusing...
+    """ Creates a new batch normalization layer with the given name, if a layer of the
+    same name does not already exists.
+
+    Args:
+        layers: a dictionary of all the layers created, with the key being their names.
+        name: the name of the layer which we are trying to retrieve.
+    Returns:
+        a batch normalization layer with the given name.
     """
     if not name in layers:
         temp = tf.keras.layers.BatchNormalization(axis=3, momentum=0.0, epsilon=0.0001)
@@ -83,8 +106,19 @@ def get_dis_bn(layers, name):
 
 
 def dis_cnn_model_fn(inputs, layers):
-    """
-    binary classifier!
+    """ A deep convolutional neural network which acts as a binary classifier. Given a
+    batch of images of size 64 x 64, it will output a number between 0 and 1, for each
+    image in the batch, representing how confident it is that the image is a ground
+    image (rather than one that is generated).
+
+    Inspired by:
+    https://github.com/manumathewthomas/ImageDenoisingGAN
+
+    Args:
+        input: a batch of image (either ground or generated) of size 64 x 64.
+    Returns:
+        a 1-D vector whose size is the batch size composed strictly of numbers between
+        0 and 1.
     """
     with tf.variable_scope("discriminator"):
         # First Outer Convolutional Layer:
