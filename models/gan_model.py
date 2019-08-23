@@ -13,7 +13,7 @@ def gen_cnn_model_fn(inputs):
 
     Inspired by:
     https://github.com/manumathewthomas/ImageDenoisingGAN
-    
+
     BUT IS BEING MODIIFIED to use a U-NET structure:
     https://arxiv.org/abs/1505.04597
 
@@ -55,18 +55,18 @@ def gen_cnn_model_fn(inputs):
                 )(current)
                 current = tf.nn.leaky_relu(current)
             current = tf.identity(inputs) + current
-    # TODO: Use a U-Net based structure for deconvolution.
-    # Final Convolutional Layer:
-    output = tf.keras.layers.Conv2D(
+    # U-Net based structure for deconvolution.
+    current = tf.keras.layers.Conv2D(
         filters=3, kernel_size=[3, 3], kernel_initializer="Orthogonal", padding="same"
     )(current)
-    return output
+    current = u_net_model_fn(current)
+    return current
 
 
 def get_dis_conv(layers, name, filters, strides, kernel):
     """ Creates a new convolutional layer with the given name, if a layer of the same
     name does not already exists.
-    
+
     Args:
         layers: a dictionary of all the layers created, with the key being their names.
         name: the name of the layer which we are trying to retrieve.
@@ -141,3 +141,111 @@ def dis_cnn_model_fn(inputs, layers):
         current = get_dis_conv(layers, "output_layer_conv", 1, 1, [4, 4])(current)
         current = get_dis_bn(layers, "output_layer_bn")(current)
     return tf.squeeze(tf.nn.sigmoid(current))
+
+
+############## IMCOMPLETE UNET MODEL INSPIRED BY: https://www.jianshu.com/p/c01136249540
+
+def conv_relu_layer(net, numfilters, name):
+    network = tf.layers.conv2d(
+        net,
+        activation=tf.nn.relu,
+        filters=numfilters,
+        kernel_size=(3, 3),
+        padding="same",
+        name="{}_conv_relu".format(name),
+    )
+    return network
+
+
+def maxpool(net, name):
+    network = tf.layers.max_pooling2d(
+        net,
+        pool_size=(2, 2),
+        strides=(2, 2),
+        padding="valid",
+        name="{}_maxpool".format(name),
+    )
+    return network
+
+
+def up_conv(net, numfilters, name):
+    network = tf.layers.conv2d_transpose(
+        net,
+        filters=numfilters,
+        kernel_size=(2, 2),
+        strides=(2, 2),
+        padding="valid",
+        activation=tf.nn.relu,
+        name="{}_up_conv".format(name),
+    )
+    return network
+
+
+def copy_crop(skip_connect, net, dimension):
+    print(skip_connect.shape)
+    net_shape = net.get_shape()
+    size = [-1, net_shape[1].value, net_shape[2].value, -1]
+    if dimension:
+        size = [-1, size[0], size[1], -1]
+    skip_connect_crop = tf.slice(skip_connect, [0, 0, 0, 0], size)
+    concat = tf.concat([skip_connect_crop, net], axis=3)
+    return concat
+
+
+def conv1x1(net, numfilters, name):
+    return tf.layers.conv2d(
+        net,
+        filters=numfilters,
+        strides=(1, 1),
+        kernel_size=(1, 1),
+        name="{}_conv1x1".format(name),
+        padding="SAME",
+    )
+
+
+def u_net_model_fn(inputs, input_size=[64, 64]):
+    """
+    Taken From:
+    https://www.jianshu.com/p/c01136249540
+    """
+    # define downsample path
+    network = conv_relu_layer(inputs, numfilters=64, name="lev1_layer1")
+    skip_con1 = conv_relu_layer(network, numfilters=64, name="lev1_layer2")
+    network = maxpool(skip_con1, "lev2_layer1")
+    network = conv_relu_layer(network, 128, "lev2_layer2")
+    skip_con2 = conv_relu_layer(network, 128, "lev2_layer3")
+    network = maxpool(skip_con2, "lev3_layer1")
+    network = conv_relu_layer(network, 256, "lev3_layer1")
+    skip_con3 = conv_relu_layer(network, 256, "lev3_layer2")
+    network = maxpool(skip_con3, "lev4_layer1")
+    network = conv_relu_layer(network, 512, "lev4_layer2")
+    skip_con4 = conv_relu_layer(network, 512, "lev4_layer3")
+    network = maxpool(skip_con4, "lev5_layer1")
+    network = conv_relu_layer(network, 1024, "lev5_layer2")
+    network = conv_relu_layer(network, 1024, "lev5_layer3")
+
+    # define upsample path
+    network = up_conv(network, 512, "lev6_layer1")
+
+    network = copy_crop(skip_con4, network, input_size)
+
+    network = conv_relu_layer(network, numfilters=512, name="lev6_layer2")
+
+    network = conv_relu_layer(network, numfilters=512, name="lev6_layer3")
+
+    network = up_conv(network, 256, name="lev7_layer1")
+    network = copy_crop(skip_con3, network)
+    network = conv_relu_layer(network, 256, name="lev7_layer2")
+    network = conv_relu_layer(network, 256, "lev7_layer3")
+
+    network = up_conv(network, 128, name="lev8_layer1")
+    network = copy_crop(skip_con2, network)
+    network = conv_relu_layer(network, 128, name="lev8_layer2")
+    network = conv_relu_layer(network, 128, "lev8_layer3")
+
+    network = up_conv(network, 64, name="lev9_layer1")
+    network = copy_crop(skip_con1, network)
+    network = conv_relu_layer(network, 64, name="lev9_layer2")
+    network = conv_relu_layer(network, 64, name="lev9_layer3")
+    network = conv1x1(network, 2, name="lev9_layer4")
+    return network
